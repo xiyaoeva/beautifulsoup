@@ -88,6 +88,101 @@ def test_invalid_constructor_mix():
     else:
         raise AssertionError("Expected ValueError when mixing constructors") #Milestone3ends
 
+
+def test_register_rule_by_tag_name():
+    html = "<root><b>bold</b><i>italic</i></root>"
+    replacer = SoupReplacer()
+    replacer.register_rule(tag_name="b", new_name="strong")
+
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    assert soup.find("b") is None
+    strong = soup.find("strong")
+    assert strong and strong.text == "bold"
+
+
+def test_register_rule_constant_attrs():
+    html = '<root><p class="lead">text</p></root>'
+    replacer = SoupReplacer()
+    replacer.register_rule(
+        tag_name="p",
+        new_attrs={"class": "lead", "data-role": "hero"},
+    )
+
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    p = soup.find("p")
+    assert p is not None
+    assert p["data-role"] == "hero"
+    assert "lead" in p.get("class", [])
+
+
+def test_register_rule_priority():
+    html = "<root><b>bold</b></root>"
+    replacer = SoupReplacer()
+    replacer.register_rule(tag_name="b", new_name="low", priority=1)
+    replacer.register_rule(tag_name="b", new_name="high", priority=10)
+
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    assert soup.find("low") is None
+    assert soup.find("high") is not None
+
+
+def test_register_rule_stop_processing():
+    html = "<root><b>bold</b></root>"
+    replacer = SoupReplacer()
+    replacer.register_rule(
+        tag_name="b",
+        new_name="strong",
+        stop_processing=True,
+    )
+    replacer.register_rule(
+        tag_name="strong",
+        new_attrs={"data-after": "true"},
+    )
+
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    strong = soup.find("strong")
+    assert strong is not None
+    assert "data-after" not in strong.attrs
+
+
+def test_register_rule_match_predicate():
+    html = '<root><span class="keep">a</span><span>b</span></root>'
+    replacer = SoupReplacer()
+    replacer.register_rule(
+        match=lambda tag: tag.name == "span" and "keep" in (tag.get("class") or []),
+        new_attrs={"class": "keep", "data-flag": "1"},
+    )
+
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    flagged = soup.find("span", {"data-flag": "1"})
+    assert flagged is not None
+    assert flagged.text == "a"
+    assert soup.find_all("span", {"data-flag": "1"})[0] == flagged
+    assert soup.find_all("span")[-1].attrs == {}
+
+
+def test_from_rules_constructor():
+    html = '<root><code data-lang="py">print()</code></root>'
+    replacer = SoupReplacer.from_rules(
+        {"tag_name": "code", "new_name": "pre", "priority": 5},
+        {
+            "match": lambda tag: tag.name == "pre",
+            "xformer": lambda tag: tag.attrs.setdefault("data-block", "true"),
+        },
+    )
+
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    pre = soup.find("pre")
+    assert pre is not None
+    assert pre.get("data-block") == "true"
+    assert pre.get("data-lang") == "py"
+
 if __name__ == "__main__":
     try:
         test_basic_replacement()
@@ -99,7 +194,14 @@ if __name__ == "__main__":
         test_side_effect_transformer() #Milestone3starts
         test_invalid_constructor_mix()#Milestone3starts
 
-        print("OK (7 tests)")
+        test_register_rule_by_tag_name() #Milestone3starts2
+        test_register_rule_constant_attrs() #Milestone3starts2
+        test_register_rule_priority() #Milestone3starts2
+        test_register_rule_stop_processing()#Milestone3starts2
+        test_register_rule_match_predicate() #Milestone3starts2
+        test_from_rules_constructor()#Milestone3starts2
+
+        print("OK (13 tests)")
         sys.exit(0)
     except AssertionError:
         # 打印更友好的失败码与堆栈
