@@ -710,12 +710,13 @@ class BeautifulSoup(Tag):
         :param kwattrs: Keyword arguments for the new Tag's attribute values.
 
         """
-        # Apply SoupReplacer during tag creation milestone2part3 Xiyao LI
-        if getattr(self, "replacer", None) is not None: #milestone2part3 Xiyao LI
-            try: #milestone2part3
-                name = self.replacer.replace(name) #milestone2part3 Xiyao LI
-            except Exception: #milestone2part3
-                pass #milestone2part3
+        replacer = getattr(self, "replacer", None) #milestone3 Xiyao LI
+        original_name = name #milestone3 Xiyao LI
+        if replacer is not None: #milestone3 Xiyao LI
+            try: #milestone3 Xiyao LI
+                name = replacer.preprocess_name(name) #milestone3 Xiyao LI
+            except Exception: #milestone3 Xiyao LI
+                pass #milestone3 Xiyao LI
 
         attr_container = self.builder.attribute_dict_class(**kwattrs)
         if attrs is not None:
@@ -736,10 +737,50 @@ class BeautifulSoup(Tag):
             sourcepos=sourcepos,
         )
 
+        if replacer is not None: #milestone3 Xiyao LI
+            self._apply_replacer_to_tag(tag, original_name) #milestone3 Xiyao LI
+
         if string is not None:
             tag.string = string
         return tag
 
+    def _apply_replacer_to_tag(self, tag: Tag, original_name: str) -> None: #milestone3 Xiyao LI start
+        """Run the active :class:`SoupReplacer` against ``tag``."""
+
+        replacer = getattr(self, "replacer", None)
+        if replacer is None:
+            return
+
+        # Record the pre-transformation name so that closing tags can be
+        # matched against the transformed open tags.
+        setattr(tag, "_replacer_original_name", original_name)
+
+        try:
+            replacer.apply(tag)
+        except Exception:
+            # Ignore transformation errors so that parsing can continue.
+            pass
+
+    def _resolve_replacer_end_tag_name(self, name: str) -> str:
+        """Map the closing tag ``name`` to the transformed open tag name."""
+
+        replacer = getattr(self, "replacer", None)
+        if replacer is None:
+            return name
+
+        try:
+            for tag in reversed(self.tagStack):
+                if getattr(tag, "_replacer_original_name", tag.name) == name:
+                    return tag.name
+        except Exception:
+            # Fall back to simple name replacement if stack introspection fails.
+            pass
+
+        try:
+            return replacer.preprocess_name(name)
+        except Exception:
+            return name
+    # milestone3 Xiyao LI end
     def string_container(
         self, base_class: Optional[Type[NavigableString]] = None
     ) -> Type[NavigableString]:
@@ -1005,13 +1046,13 @@ class BeautifulSoup(Tag):
         sourcepos: Optional[int] = None,
         namespaces: Optional[Dict[str, str]] = None,
     ) -> Optional[Tag]:
-        # === NEW (Milestone2Part3 Xiyao LI): apply SoupReplacer on start tags ===
-        if getattr(self, "replacer", None) is not None:
+        replacer = getattr(self, "replacer", None)  # === NEW (Milestone3 Xiyao LI) ===
+        original_name = name
+        if replacer is not None:
             try:
-                name = self.replacer.replace(name)
+                name = replacer.preprocess_name(name)
             except Exception:
-                pass
-        # === end NEW Xiyao LI ===
+                pass   # === end NEW Xiyao LI milestone3 ===
         """Called by the tree builder when a new tag is encountered.
         
         :param name: Name of the tag.
@@ -1062,6 +1103,8 @@ class BeautifulSoup(Tag):
         )
         if tag is None:
             return tag
+        if replacer is not None: # === NEW (Milestone3 Xiyao LI) ===
+            self._apply_replacer_to_tag(tag, original_name) # === NEW (Milestone3 Xiyao LI) ===
         if self._most_recent_element is not None:
             self._most_recent_element.next_element = tag
         self._most_recent_element = tag
@@ -1069,13 +1112,8 @@ class BeautifulSoup(Tag):
         return tag
 
     def handle_endtag(self, name: str, nsprefix: Optional[str] = None) -> None:
-        # === NEW (Milestone2Part3 Xiyao LI): apply SoupReplacer on end tags ===
-        if getattr(self, "replacer", None) is not None:
-            try:
-                name = self.replacer.replace(name)
-            except Exception:
-                pass
-        # === end NEW ===
+        if getattr(self, "replacer", None) is not None: # === NEW (Milestone3 Xiyao LI) ===
+            name = self._resolve_replacer_end_tag_name(name) # === NEW (Milestone3 Xiyao LI) ===
         """Called by the tree builder when an ending tag is encountered.
 
         :param name: Name of the tag.

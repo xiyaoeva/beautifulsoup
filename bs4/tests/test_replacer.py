@@ -36,12 +36,70 @@ def test_nested_and_multiple():
     blocks = soup.find_all("blockquote")
     assert len(blocks) == 2 and [t.text for t in blocks] == ["a", "b"]
 
+
+def test_name_transformer_callable():#Milestone3starts
+    html = "<div><b>bold</b><i>italic</i></div>"
+
+    replacer = SoupReplacer(
+        name_xformer=lambda tag: "blockquote" if tag.name == "b" else tag.name
+    )
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    assert soup.find("b") is None
+    assert [t.name for t in soup.find_all()] == ["div", "blockquote", "i"]
+    assert soup.blockquote.text == "bold"
+
+
+def test_attrs_transformer_callable():
+    html = '<div><p class="foo" id="x">content</p></div>'
+
+    def attrs_xformer(tag):
+        if tag.name == "p":
+            # Return a brand new attribute mapping without the class attribute.
+            return {k: v for k, v in tag.attrs.items() if k != "class"}
+        return tag.attrs
+
+    replacer = SoupReplacer(attrs_xformer=attrs_xformer)
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    p = soup.p
+    assert p is not None
+    assert "class" not in p.attrs and p["id"] == "x"
+
+
+def test_side_effect_transformer():
+    html = '<div><p class="foo" id="x">content</p></div>'
+
+    def remove_class_attr(tag):
+        if "class" in tag.attrs:
+            del tag.attrs["class"]
+
+    replacer = SoupReplacer(xformer=remove_class_attr)
+    soup = BeautifulSoup(html, "html.parser", replacer=replacer)
+
+    assert "class" not in soup.p.attrs
+
+
+def test_invalid_constructor_mix():
+    try:
+        SoupReplacer("b", "blockquote", name_xformer=lambda tag: tag.name)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Expected ValueError when mixing constructors") #Milestone3ends
+
 if __name__ == "__main__":
     try:
         test_basic_replacement()
         test_no_replacement_for_other_tags()
         test_nested_and_multiple()
-        print("OK (3 tests)")
+
+        test_name_transformer_callable() #Milestone3starts
+        test_attrs_transformer_callable()#Milestone3starts
+        test_side_effect_transformer() #Milestone3starts
+        test_invalid_constructor_mix()#Milestone3starts
+
+        print("OK (7 tests)")
         sys.exit(0)
     except AssertionError:
         # 打印更友好的失败码与堆栈
