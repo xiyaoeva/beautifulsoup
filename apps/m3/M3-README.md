@@ -2,7 +2,7 @@
 
 ## New test cases to test API
 ```bash
-python task7_use_soup_replacer.py https://www.w3schools.com/html/html_paragraphs.asp
+python test_replacer.py
 ```
 
 ## Application: Milestone-1 Task 7
